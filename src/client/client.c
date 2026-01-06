@@ -87,6 +87,11 @@ bool start_local_server(const GameConfig *config, int *port) {
     
     if (server_pid == 0) {
         // Child process - start server
+        
+        // Redirect stdout and stderr to /dev/null to avoid messing up ncurses UI
+        freopen("/dev/null", "w", stdout);
+        freopen("/dev/null", "w", stderr);
+        
         char port_str[16];
         char width_str[16];
         char height_str[16];
@@ -129,7 +134,7 @@ bool start_local_server(const GameConfig *config, int *port) {
     }
     
     // Parent process - wait for server to start
-    sleep(1);
+    sleep(2);  // Give server more time to fully initialize
     return true;
 }
 
@@ -351,7 +356,50 @@ int main(void) {
                 if (get_game_config(&config)) {
                     int port = DEFAULT_PORT;
                     
-                    render_message("Starting server...");
+                    // Show starting server message BEFORE starting server
+                    clear();
+                    int max_y, max_x;
+                    getmaxyx(stdscr, max_y, max_x);
+                    
+                    int box_width = 50;
+                    int box_height = 10;
+                    int start_x = (max_x - box_width) / 2;
+                    int start_y = (max_y - box_height) / 2;
+                    
+                    // Draw outer box
+                    attron(A_BOLD);
+                    for (int i = 0; i < box_width; i++) {
+                        mvaddch(start_y, start_x + i, '═');
+                        mvaddch(start_y + box_height, start_x + i, '═');
+                    }
+                    for (int i = 1; i < box_height; i++) {
+                        mvaddch(start_y + i, start_x, '║');
+                        mvaddch(start_y + i, start_x + box_width - 1, '║');
+                    }
+                    mvaddch(start_y, start_x, '╔');
+                    mvaddch(start_y, start_x + box_width - 1, '╗');
+                    mvaddch(start_y + box_height, start_x, '╚');
+                    mvaddch(start_y + box_height, start_x + box_width - 1, '╝');
+                    
+                    // Title
+                    attron(A_REVERSE);
+                    mvprintw(start_y + 2, start_x + (box_width - 20) / 2, "  STARTING SERVER  ");
+                    attroff(A_REVERSE);
+                    
+                    // Server info
+                    mvprintw(start_y + 4, start_x + 4, "Mode:       %s", 
+                             config.mode == MODE_TIMED ? "Timed" : "Standard");
+                    mvprintw(start_y + 5, start_x + 4, "World:      %dx%d", 
+                             config.width, config.height);
+                    mvprintw(start_y + 6, start_x + 4, "Obstacles:  %s", 
+                             config.world_type == WORLD_WITH_OBSTACLES ? "Yes" : "No");
+                    mvprintw(start_y + 7, start_x + 4, "Port:       %d", port);
+                    
+                    // Loading animation
+                    mvprintw(start_y + 9, start_x + (box_width - 18) / 2, "Please wait...");
+                    
+                    attroff(A_BOLD);
+                    refresh();
                     
                     if (start_local_server(&config, &port)) {
                         char name[MAX_NAME_LENGTH];
@@ -359,13 +407,62 @@ int main(void) {
                         clear();
                         nodelay(stdscr, FALSE);
                         echo();
-                        mvprintw(10, 10, "Your name: ");
+                        
+                        int start_y = max_y / 2 - 3;
+                        int start_x = max_x / 2 - 20;
+                        
+                        attron(A_BOLD | A_UNDERLINE);
+                        mvprintw(start_y, start_x + 5, "=== ENTER YOUR NAME ===");
+                        attroff(A_BOLD | A_UNDERLINE);
+                        start_y += 3;
+                        
+                        attron(A_BOLD);
+                        mvprintw(start_y, start_x, "Your name:");
+                        attroff(A_BOLD);
+                        mvprintw(start_y, start_x + 11, " ");
+                        move(start_y, start_x + 12);
+                        refresh();
+                        
                         getnstr(name, MAX_NAME_LENGTH - 1);
                         noecho();
                         nodelay(stdscr, TRUE);
                         
                         if (strlen(name) > 0) {
-                            render_message("Connecting to server...");
+                            clear();
+                            
+                            int box_width = 50;
+                            int box_height = 8;
+                            int conn_start_x = (max_x - box_width) / 2;
+                            int conn_start_y = (max_y - box_height) / 2;
+                            
+                            // Draw outer box
+                            attron(A_BOLD);
+                            for (int i = 0; i < box_width; i++) {
+                                mvaddch(conn_start_y, conn_start_x + i, '═');
+                                mvaddch(conn_start_y + box_height, conn_start_x + i, '═');
+                            }
+                            for (int i = 1; i < box_height; i++) {
+                                mvaddch(conn_start_y + i, conn_start_x, '║');
+                                mvaddch(conn_start_y + i, conn_start_x + box_width - 1, '║');
+                            }
+                            mvaddch(conn_start_y, conn_start_x, '╔');
+                            mvaddch(conn_start_y, conn_start_x + box_width - 1, '╗');
+                            mvaddch(conn_start_y + box_height, conn_start_x, '╚');
+                            mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, '╝');
+                            
+                            // Title
+                            attron(A_REVERSE);
+                            mvprintw(conn_start_y + 2, conn_start_x + (box_width - 16) / 2, "  CONNECTING...  ");
+                            attroff(A_REVERSE);
+                            
+                            // Connection info
+                            mvprintw(conn_start_y + 4, conn_start_x + 4, "Player:  %s", name);
+                            mvprintw(conn_start_y + 5, conn_start_x + 4, "Server:  127.0.0.1:%d", port);
+                            
+                            mvprintw(conn_start_y + 7, conn_start_x + (box_width - 18) / 2, "Please wait...");
+                            
+                            attroff(A_BOLD);
+                            refresh();
                             
                             if (connect_to_game("127.0.0.1", port, name)) {
                                 game_loop();
@@ -389,7 +486,43 @@ int main(void) {
                 char name[MAX_NAME_LENGTH];
                 
                 if (get_connection_info(host, &port, name)) {
-                    render_message("Connecting...");
+                    clear();
+                    int max_y, max_x;
+                    getmaxyx(stdscr, max_y, max_x);
+                    
+                    int box_width = 50;
+                    int box_height = 8;
+                    int conn_start_x = (max_x - box_width) / 2;
+                    int conn_start_y = (max_y - box_height) / 2;
+                    
+                    // Draw outer box
+                    attron(A_BOLD);
+                    for (int i = 0; i < box_width; i++) {
+                        mvaddch(conn_start_y, conn_start_x + i, '═');
+                        mvaddch(conn_start_y + box_height, conn_start_x + i, '═');
+                    }
+                    for (int i = 1; i < box_height; i++) {
+                        mvaddch(conn_start_y + i, conn_start_x, '║');
+                        mvaddch(conn_start_y + i, conn_start_x + box_width - 1, '║');
+                    }
+                    mvaddch(conn_start_y, conn_start_x, '╔');
+                    mvaddch(conn_start_y, conn_start_x + box_width - 1, '╗');
+                    mvaddch(conn_start_y + box_height, conn_start_x, '╚');
+                    mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, '╝');
+                    
+                    // Title
+                    attron(A_REVERSE);
+                    mvprintw(conn_start_y + 2, conn_start_x + (box_width - 16) / 2, "  CONNECTING...  ");
+                    attroff(A_REVERSE);
+                    
+                    // Connection info
+                    mvprintw(conn_start_y + 4, conn_start_x + 4, "Player:  %s", name);
+                    mvprintw(conn_start_y + 5, conn_start_x + 4, "Server:  %s:%d", host, port);
+                    
+                    mvprintw(conn_start_y + 7, conn_start_x + (box_width - 18) / 2, "Please wait...");
+                    
+                    attroff(A_BOLD);
+                    refresh();
                     
                     if (connect_to_game(host, port, name)) {
                         game_loop();

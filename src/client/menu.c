@@ -12,13 +12,6 @@ MenuChoice show_main_menu(bool can_resume) {
     nodelay(stdscr, FALSE);
     
     const char *title = "=== SNAKE GAME ===";
-    const char *options[] = {
-        "1. New Game",
-        "2. Join Game",
-        "3. Resume Game",
-        "4. Exit"
-    };
-    int num_options = can_resume ? 4 : 3;
     
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -31,24 +24,41 @@ MenuChoice show_main_menu(bool can_resume) {
     attroff(A_BOLD);
     
     start_y += 2;
-    for (int i = 0; i < num_options; i++) {
-        if (i == 2 && !can_resume) continue;
-        mvprintw(start_y + i, start_x, "%s", options[i]);
+    
+    // Dynamically build menu based on can_resume
+    if (can_resume) {
+        mvprintw(start_y++, start_x, "1. New Game");
+        mvprintw(start_y++, start_x, "2. Join Game");
+        mvprintw(start_y++, start_x, "3. Resume Game");
+        mvprintw(start_y++, start_x, "4. Exit");
+    } else {
+        mvprintw(start_y++, start_x, "1. New Game");
+        mvprintw(start_y++, start_x, "2. Join Game");
+        mvprintw(start_y++, start_x, "3. Exit");
     }
     
-    mvprintw(start_y + num_options + 2, start_x - 10, "Enter your choice: ");
+    mvprintw(start_y + 2, start_x - 10, "Enter your choice: ");
     refresh();
     
     int choice = getch();
     
     nodelay(stdscr, TRUE);
     
-    switch (choice) {
-        case '1': return MENU_NEW_GAME;
-        case '2': return MENU_JOIN_GAME;
-        case '3': return can_resume ? MENU_RESUME_GAME : MENU_CANCEL;
-        case '4': return MENU_EXIT;
-        default: return MENU_CANCEL;
+    if (can_resume) {
+        switch (choice) {
+            case '1': return MENU_NEW_GAME;
+            case '2': return MENU_JOIN_GAME;
+            case '3': return MENU_RESUME_GAME;
+            case '4': return MENU_EXIT;
+            default: return MENU_CANCEL;
+        }
+    } else {
+        switch (choice) {
+            case '1': return MENU_NEW_GAME;
+            case '2': return MENU_JOIN_GAME;
+            case '3': return MENU_EXIT;
+            default: return MENU_CANCEL;
+        }
     }
 }
 
@@ -59,73 +69,125 @@ bool get_game_config(GameConfig *config) {
     
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
-    int start_y = max_y / 2 - 8;
-    int start_x = 10;
+    int start_y = max_y / 2 - 10;
+    int start_x = max_x / 2 - 25;
     
-    attron(A_BOLD);
-    mvprintw(start_y++, start_x, "=== NEW GAME CONFIGURATION ===");
-    attroff(A_BOLD);
-    start_y += 2;
+    // Title
+    attron(A_BOLD | A_UNDERLINE);
+    mvprintw(start_y, start_x + 5, "=== NEW GAME CONFIGURATION ===");
+    attroff(A_BOLD | A_UNDERLINE);
+    start_y += 3;
     
     // Mode
-    mvprintw(start_y++, start_x, "Game mode (1=Standard, 2=Timed): ");
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Game mode:");
+    attroff(A_BOLD);
+    mvprintw(start_y + 1, start_x + 2, "1 = Standard (10s after last player)");
+    mvprintw(start_y + 2, start_x + 2, "2 = Timed (fixed time limit)");
+    mvprintw(start_y + 3, start_x, "Choice: ");
+    move(start_y + 3, start_x + 8);
+    refresh();
     char mode_str[10];
     getnstr(mode_str, 9);
     config->mode = (atoi(mode_str) == 2) ? MODE_TIMED : MODE_STANDARD;
+    start_y += 5;
     
     // Time limit
     if (config->mode == MODE_TIMED) {
-        mvprintw(start_y++, start_x, "Time limit (seconds): ");
+        attron(A_BOLD);
+        mvprintw(start_y, start_x, "Time limit (seconds):");
+        attroff(A_BOLD);
+        mvprintw(start_y, start_x + 22, "[default: 300] ");
+        move(start_y, start_x + 37);
+        refresh();
         char time_str[10];
         getnstr(time_str, 9);
         config->time_limit = atoi(time_str);
         if (config->time_limit <= 0) config->time_limit = 300;
+        start_y += 2;
     } else {
         config->time_limit = 0;
     }
     
     // World type
-    mvprintw(start_y++, start_x, "World type (1=No obstacles, 2=With obstacles): ");
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "World type:");
+    attroff(A_BOLD);
+    mvprintw(start_y + 1, start_x + 2, "1 = No obstacles (wrap around)");
+    mvprintw(start_y + 2, start_x + 2, "2 = With obstacles");
+    mvprintw(start_y + 3, start_x, "Choice: ");
+    move(start_y + 3, start_x + 8);
+    refresh();
     char world_str[10];
     getnstr(world_str, 9);
     config->world_type = (atoi(world_str) == 2) ? WORLD_WITH_OBSTACLES : WORLD_NO_OBSTACLES;
+    start_y += 5;
     
     // Load from file
     config->load_from_file = false;
     if (config->world_type == WORLD_WITH_OBSTACLES) {
-        mvprintw(start_y++, start_x, "Load map from file? (y/n): ");
+        attron(A_BOLD);
+        mvprintw(start_y, start_x, "Load map from file? (y/n):");
+        attroff(A_BOLD);
+        mvprintw(start_y, start_x + 27, " ");
+        move(start_y, start_x + 28);
+        refresh();
         char load_str[10];
         getnstr(load_str, 9);
+        start_y += 2;
         
         if (load_str[0] == 'y' || load_str[0] == 'Y') {
             config->load_from_file = true;
-            mvprintw(start_y++, start_x, "Map file path: ");
+            attron(A_BOLD);
+            mvprintw(start_y, start_x, "Map file path:");
+            attroff(A_BOLD);
+            mvprintw(start_y, start_x + 15, " ");
+            move(start_y, start_x + 16);
+            refresh();
             getnstr(config->map_file, sizeof(config->map_file) - 1);
+            start_y += 2;
         }
     }
     
     // Dimensions
     if (!config->load_from_file) {
-        mvprintw(start_y++, start_x, "Width (20-80): ");
+        attron(A_BOLD);
+        mvprintw(start_y, start_x, "World width (20-80):");
+        attroff(A_BOLD);
+        mvprintw(start_y, start_x + 21, "[default: 40] ");
+        move(start_y, start_x + 35);
+        refresh();
         char width_str[10];
         getnstr(width_str, 9);
         config->width = atoi(width_str);
         if (config->width < 20) config->width = 40;
         if (config->width > 80) config->width = 80;
+        start_y += 2;
         
-        mvprintw(start_y++, start_x, "Height (10-40): ");
+        attron(A_BOLD);
+        mvprintw(start_y, start_x, "World height (10-40):");
+        attroff(A_BOLD);
+        mvprintw(start_y, start_x + 22, "[default: 20] ");
+        move(start_y, start_x + 36);
+        refresh();
         char height_str[10];
         getnstr(height_str, 9);
         config->height = atoi(height_str);
         if (config->height < 10) config->height = 20;
         if (config->height > 40) config->height = 40;
+        start_y += 2;
     } else {
         config->width = 40;
         config->height = 20;
     }
     
     // Port
-    mvprintw(start_y++, start_x, "Server port (default 8888): ");
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Server port:");
+    attroff(A_BOLD);
+    mvprintw(start_y, start_x + 13, "[default: 8888] ");
+    move(start_y, start_x + 29);
+    refresh();
     char port_str[10];
     getnstr(port_str, 9);
     int port = atoi(port_str);
@@ -144,18 +206,32 @@ bool get_connection_info(char *host, int *port, char *player_name) {
     
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
-    int start_y = max_y / 2 - 4;
-    int start_x = 10;
+    int start_y = max_y / 2 - 6;
+    int start_x = max_x / 2 - 25;
     
+    // Title
+    attron(A_BOLD | A_UNDERLINE);
+    mvprintw(start_y, start_x + 10, "=== JOIN GAME ===");
+    attroff(A_BOLD | A_UNDERLINE);
+    start_y += 3;
+    
+    // Player name
     attron(A_BOLD);
-    mvprintw(start_y++, start_x, "=== JOIN GAME ===");
+    mvprintw(start_y, start_x, "Your name:");
     attroff(A_BOLD);
+    mvprintw(start_y, start_x + 11, " ");
+    move(start_y, start_x + 12);
+    refresh();
+    getnstr(player_name, MAX_NAME_LENGTH - 1);
     start_y += 2;
     
-    mvprintw(start_y++, start_x, "Your name: ");
-    getnstr(player_name, MAX_NAME_LENGTH - 1);
-    
-    mvprintw(start_y++, start_x, "Server host (default localhost): ");
+    // Server host
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Server host:");
+    attroff(A_BOLD);
+    mvprintw(start_y, start_x + 13, "[default: localhost] ");
+    move(start_y, start_x + 34);
+    refresh();
     char host_str[256];
     getnstr(host_str, 255);
     if (strlen(host_str) == 0) {
@@ -163,8 +239,15 @@ bool get_connection_info(char *host, int *port, char *player_name) {
     } else {
         strcpy(host, host_str);
     }
+    start_y += 2;
     
-    mvprintw(start_y++, start_x, "Server port (default 8888): ");
+    // Server port
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Server port:");
+    attroff(A_BOLD);
+    mvprintw(start_y, start_x + 13, "[default: 8888] ");
+    move(start_y, start_x + 29);
+    refresh();
     char port_str[10];
     getnstr(port_str, 9);
     *port = atoi(port_str);
@@ -182,12 +265,35 @@ void show_error(const char *message) {
     
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
+    int msg_len = strlen(message);
+    int box_width = msg_len + 6;
+    if (box_width < 30) box_width = 30;
     
+    int start_x = (max_x - box_width) / 2;
+    int start_y = max_y / 2 - 2;
+    
+    // Draw box
     attron(A_BOLD | COLOR_PAIR(COLOR_PAIR_FOOD));
-    mvprintw(max_y / 2, (max_x - strlen(message)) / 2, "%s", message);
+    for (int i = 0; i < box_width; i++) {
+        mvaddch(start_y, start_x + i, '═');
+        mvaddch(start_y + 4, start_x + i, '═');
+    }
+    for (int i = 1; i < 4; i++) {
+        mvaddch(start_y + i, start_x, '║');
+        mvaddch(start_y + i, start_x + box_width - 1, '║');
+    }
+    mvaddch(start_y, start_x, '╔');
+    mvaddch(start_y, start_x + box_width - 1, '╗');
+    mvaddch(start_y + 4, start_x, '╚');
+    mvaddch(start_y + 4, start_x + box_width - 1, '╝');
+    
+    // Error message
+    mvprintw(start_y + 2, (max_x - msg_len) / 2, "%s", message);
     attroff(A_BOLD | COLOR_PAIR(COLOR_PAIR_FOOD));
     
-    mvprintw(max_y / 2 + 2, (max_x - 20) / 2, "Press any key...");
+    // Press key prompt
+    const char *prompt = "Press any key...";
+    mvprintw(start_y + 6, (max_x - strlen(prompt)) / 2, "%s", prompt);
     refresh();
     
     getch();
@@ -200,16 +306,16 @@ void show_game_over_stats(const GameState *state) {
     
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
-    int start_y = max_y / 2 - 8;
-    int start_x = max_x / 2 - 20;
+    int start_y = max_y / 2 - 10;
+    int start_x = max_x / 2 - 25;
     
-    attron(A_BOLD);
-    mvprintw(start_y++, start_x, "=== GAME OVER ===");
-    attroff(A_BOLD);
-    start_y += 2;
-    
-    mvprintw(start_y++, start_x, "Final Scores:");
-    start_y++;
+    // Title with box
+    attron(A_BOLD | A_REVERSE);
+    mvprintw(start_y, start_x + 8, "                          ");
+    mvprintw(start_y + 1, start_x + 8, "       GAME OVER         ");
+    mvprintw(start_y + 2, start_x + 8, "                          ");
+    attroff(A_BOLD | A_REVERSE);
+    start_y += 5;
     
     // Sort players by score
     int sorted_ids[MAX_PLAYERS];
@@ -232,18 +338,43 @@ void show_game_over_stats(const GameState *state) {
         }
     }
     
+    // Final Scores header
+    attron(A_BOLD | A_UNDERLINE);
+    mvprintw(start_y, start_x, "FINAL SCORES:");
+    attroff(A_BOLD | A_UNDERLINE);
+    start_y += 2;
+    
+    // Draw scores
     for (int i = 0; i < count; i++) {
         int id = sorted_ids[i];
-        mvprintw(start_y++, start_x, "%d. %s: %d points", 
+        
+        if (i < 3) {
+            attron(A_BOLD);
+        }
+        
+        mvprintw(start_y++, start_x, "%d. %-15s %4d points", 
                 i + 1, state->snakes[id].name, state->snakes[id].score);
+        
+        if (i < 3) {
+            attroff(A_BOLD);
+        }
     }
     
+    // Game stats
     start_y += 2;
-    mvprintw(start_y, start_x, "Total game time: %d:%02d", 
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Game Statistics:");
+    attroff(A_BOLD);
+    start_y++;
+    mvprintw(start_y, start_x + 2, "Total time: %d:%02d", 
             state->elapsed_time / 60, state->elapsed_time % 60);
+    start_y++;
+    mvprintw(start_y, start_x + 2, "Players: %d", count);
     
-    start_y += 2;
-    mvprintw(start_y, start_x, "Press any key...");
+    // Press key prompt
+    start_y += 3;
+    const char *prompt = "Press any key to continue...";
+    mvprintw(start_y, (max_x - strlen(prompt)) / 2, "%s", prompt);
     refresh();
     
     getch();
