@@ -63,11 +63,13 @@ typedef struct {
     Position positions[MAX_SNAKE_LENGTH];
     int length;
     Direction direction;
+    Direction pending_direction; // Next direction to apply
     int player_id;
     int score;
     bool alive;
     bool paused;
     char name[MAX_NAME_LENGTH];
+    int spawn_time; // Time when player joined (in seconds)
 } Snake;
 
 // Game configuration

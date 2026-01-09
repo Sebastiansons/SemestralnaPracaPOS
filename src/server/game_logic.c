@@ -115,6 +115,7 @@ int add_player(Game *game, int socket, const char *name) {
     while (start_y >= game->state.height - 3) start_y -= 5;
     
     init_snake(&game->state.snakes[player_id], player_id, start_x, start_y, name);
+    game->state.snakes[player_id].spawn_time = game->state.elapsed_time; // Set spawn time
     game->client_sockets[player_id] = socket;
     game->client_connected[player_id] = true;
     game->pause_countdown[player_id] = 30; // 3 seconds at 10 ticks/sec

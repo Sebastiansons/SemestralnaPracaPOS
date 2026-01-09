@@ -165,6 +165,36 @@ void render_message(const char *message) {
     refresh();
 }
 
+void render_death_message(int score, int survival_time) {
+    clear();
+    int max_y, max_x;
+    getmaxyx(stdscr, max_y, max_x);
+    
+    char msg1[] = "You died!";
+    char msg2[64];
+    char msg3[64];
+    char msg4[] = "Press any key...";
+    
+    snprintf(msg2, sizeof(msg2), "Your score: %d", score);
+    snprintf(msg3, sizeof(msg3), "Survival time: %d:%02d", survival_time / 60, survival_time % 60);
+    
+    attron(A_BOLD);
+    mvprintw(max_y / 2 - 2, (max_x - strlen(msg1)) / 2, "%s", msg1);
+    attroff(A_BOLD);
+    
+    attron(COLOR_PAIR(COLOR_PAIR_FOOD) | A_BOLD);
+    mvprintw(max_y / 2, (max_x - strlen(msg2)) / 2, "%s", msg2);
+    attroff(COLOR_PAIR(COLOR_PAIR_FOOD) | A_BOLD);
+    
+    attron(COLOR_PAIR(COLOR_PAIR_SNAKE_BASE + 1) | A_BOLD);
+    mvprintw(max_y / 2 + 1, (max_x - strlen(msg3)) / 2, "%s", msg3);
+    attroff(COLOR_PAIR(COLOR_PAIR_SNAKE_BASE + 1) | A_BOLD);
+    
+    mvprintw(max_y / 2 + 3, (max_x - strlen(msg4)) / 2, "%s", msg4);
+    
+    refresh();
+}
+
 void clear_screen(void) {
     clear();
     refresh();

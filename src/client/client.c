@@ -287,9 +287,12 @@ void game_loop(void) {
                 
                 // Check if our snake died
                 if (!client_state.current_state.snakes[client_state.my_player_id].alive) {
+                    int player_score = client_state.current_state.snakes[client_state.my_player_id].score;
+                    int spawn_time = client_state.current_state.snakes[client_state.my_player_id].spawn_time;
+                    int survival_time = client_state.current_state.elapsed_time - spawn_time;
                     pthread_mutex_unlock(&client_state.state_mutex);
                     
-                    render_message("You died! Press any key...");
+                    render_death_message(player_score, survival_time);
                     nodelay(stdscr, FALSE);
                     getch();
                     nodelay(stdscr, TRUE);

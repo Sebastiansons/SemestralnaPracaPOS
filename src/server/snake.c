@@ -6,9 +6,11 @@ void init_snake(Snake *snake, int player_id, int start_x, int start_y, const cha
     snake->player_id = player_id;
     snake->length = 3;
     snake->direction = DIR_RIGHT;
+    snake->pending_direction = DIR_NONE;
     snake->score = 0;
     snake->alive = true;
     snake->paused = false;
+    snake->spawn_time = 0; // Will be set by game logic
     strncpy(snake->name, name, MAX_NAME_LENGTH - 1);
     snake->name[MAX_NAME_LENGTH - 1] = '\0';
     
@@ -22,6 +24,12 @@ void init_snake(Snake *snake, int player_id, int start_x, int start_y, const cha
 void move_snake(Snake *snake, int width, int height, bool wrap_around) {
     if (!snake->alive || snake->paused || snake->direction == DIR_NONE) {
         return;
+    }
+    
+    // Apply pending direction if there is one
+    if (snake->pending_direction != DIR_NONE) {
+        snake->direction = snake->pending_direction;
+        snake->pending_direction = DIR_NONE;
     }
     
     // Calculate new head position
@@ -123,6 +131,7 @@ void change_direction(Snake *snake, Direction new_direction) {
         return;
     }
     
+    // Check against current direction (not pending)
     if ((snake->direction == DIR_UP && new_direction == DIR_DOWN) ||
         (snake->direction == DIR_DOWN && new_direction == DIR_UP) ||
         (snake->direction == DIR_LEFT && new_direction == DIR_RIGHT) ||
@@ -130,5 +139,7 @@ void change_direction(Snake *snake, Direction new_direction) {
         return;
     }
     
-    snake->direction = new_direction;
+    // Set as pending direction to be applied on next move
+    // This prevents multiple direction changes between ticks
+    snake->pending_direction = new_direction;
 }
