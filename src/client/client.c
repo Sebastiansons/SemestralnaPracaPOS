@@ -189,10 +189,13 @@ bool connect_to_game(const char *host, int port, const char *player_name) {
     pthread_create(&thread, NULL, receive_thread, NULL);
     pthread_detach(thread);
     
-    // Wait for first state update
-    for (int i = 0; i < 20 && !client_state.state_updated; i++) {
+    // Wait for first state update (longer wait to ensure server initialized snake)
+    for (int i = 0; i < 30 && !client_state.state_updated; i++) {
         usleep(100000);
     }
+    
+    // Extra wait to ensure we get the REAL initialized state (not stale data)
+    usleep(200000); // 200ms extra
     
     // Find our player ID
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -306,8 +309,16 @@ void game_loop(void) {
                     int player_score = client_state.current_state.snakes[client_state.my_player_id].score;
                     int spawn_time = client_state.current_state.snakes[client_state.my_player_id].spawn_time;
                     int survival_time = client_state.current_state.elapsed_time - spawn_time;
+                    int player_length = client_state.current_state.snakes[client_state.my_player_id].length;
                     
-                    pthread_mutex_unlock(&client_state.state_mutex);
+                    // Skip if this looks like a stale/initial state from server
+                    // This happens when server sends state before init_snake completes
+                    // or when receiving first state after manual rejoin
+                    if (player_score == 0 && survival_time <= 0) {
+                        pthread_mutex_unlock(&client_state.state_mutex);
+                        // Don't mark as handled - wait for proper state
+                    } else {
+                        pthread_mutex_unlock(&client_state.state_mutex);
                     
                     render_death_message(player_score, survival_time, 
                                         client_state.connected_host, client_state.connected_port);
@@ -372,14 +383,15 @@ void game_loop(void) {
                         }
                     }
                     
-                    // Mark death as handled
-                    client_state.death_handled = true;
-                    
-                    // Player chose not to rejoin, disconnect and return to menu
-                    // Give server time to process the disconnect properly
-                    usleep(100000); // 100ms delay
-                    disconnect_from_game();
-                    return;
+                        // Mark death as handled
+                        client_state.death_handled = true;
+                        
+                        // Player chose not to rejoin, disconnect and return to menu
+                        // Give server time to process the disconnect properly
+                        usleep(100000); // 100ms delay
+                        disconnect_from_game();
+                        return;
+                    }
                 }
                 
                 if (client_state.current_state.game_over) {
