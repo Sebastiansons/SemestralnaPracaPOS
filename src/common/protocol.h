@@ -81,6 +81,7 @@ typedef struct {
     int time_limit; // in seconds, 0 for unlimited
     char map_file[256];
     bool load_from_file;
+    int max_players; // 1 for singleplayer, 2-8 for multiplayer
 } GameConfig;
 
 // Game state
@@ -97,6 +98,7 @@ typedef struct {
     int time_limit;
     GameMode mode;
     bool game_over;
+    int max_players; // Maximum allowed players for this game
 } GameState;
 
 // Message structures

@@ -10,6 +10,7 @@
 
 typedef struct {
     GameState state;
+    GameConfig config; // Store game configuration
     pthread_mutex_t mutex;
     bool running;
     time_t start_time;

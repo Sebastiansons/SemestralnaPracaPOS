@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <ctype.h>
 
 typedef struct {
     int socket;
@@ -19,11 +20,15 @@ typedef struct {
     int my_player_id;
     pthread_mutex_t state_mutex;
     bool state_updated;
+    char connected_host[256];
+    int connected_port;
+    bool death_handled; // Track if we've already handled the death
 } ClientState;
 
 static ClientState client_state;
 static volatile bool running = true;
 static pid_t server_pid = -1;
+static int last_connected_port = DEFAULT_PORT; // Remember last port for rejoin
 
 void signal_handler(int sig) {
     (void)sig;
@@ -96,12 +101,14 @@ bool start_local_server(const GameConfig *config, int *port) {
         char width_str[16];
         char height_str[16];
         char time_str[16];
+        char max_players_str[16];
         
         snprintf(port_str, sizeof(port_str), "%d", *port);
         snprintf(width_str, sizeof(width_str), "%d", config->width);
         snprintf(height_str, sizeof(height_str), "%d", config->height);
+        snprintf(max_players_str, sizeof(max_players_str), "%d", config->max_players);
         
-        char *args[16];
+        char *args[20];
         int arg_idx = 0;
         
         args[arg_idx++] = "./server";
@@ -111,6 +118,8 @@ bool start_local_server(const GameConfig *config, int *port) {
         args[arg_idx++] = width_str;
         args[arg_idx++] = "-h";
         args[arg_idx++] = height_str;
+        args[arg_idx++] = "-n";
+        args[arg_idx++] = max_players_str;
         
         if (config->mode == MODE_TIMED) {
             args[arg_idx++] = "-t";
@@ -170,6 +179,10 @@ bool connect_to_game(const char *host, int port, const char *player_name) {
     
     client_state.connected = true;
     client_state.game_active = true;
+    client_state.death_handled = false; // Reset death handled flag
+    last_connected_port = port; // Save port for rejoin
+    strncpy(client_state.connected_host, host, sizeof(client_state.connected_host) - 1);
+    client_state.connected_port = port;
     
     // Start receive thread
     pthread_t thread;
@@ -283,41 +296,83 @@ void game_loop(void) {
         if (!paused) {
             pthread_mutex_lock(&client_state.state_mutex);
             if (client_state.state_updated) {
-                render_game_state(&client_state.current_state, client_state.my_player_id);
+                render_game_state(&client_state.current_state, client_state.my_player_id, 
+                                 client_state.connected_host, client_state.connected_port);
                 
-                // Check if our snake died
-                if (!client_state.current_state.snakes[client_state.my_player_id].alive) {
+                // Check if our snake died (and we haven't handled it yet)
+                if (!client_state.current_state.snakes[client_state.my_player_id].alive && 
+                    !client_state.death_handled) {
+                    
+                    client_state.death_handled = true; // Mark as handled
+                    
                     int player_score = client_state.current_state.snakes[client_state.my_player_id].score;
                     int spawn_time = client_state.current_state.snakes[client_state.my_player_id].spawn_time;
                     int survival_time = client_state.current_state.elapsed_time - spawn_time;
+                    
                     pthread_mutex_unlock(&client_state.state_mutex);
                     
-                    render_death_message(player_score, survival_time);
+                    render_death_message(player_score, survival_time, 
+                                        client_state.connected_host, client_state.connected_port);
                     nodelay(stdscr, FALSE);
-                    getch();
+                    
+                    // Wait for Enter key only
+                    int key;
+                    do {
+                        key = getch();
+                    } while (key != '\n' && key != '\r' && key != KEY_ENTER);
+                    
                     nodelay(stdscr, TRUE);
                     
                     // Ask if player wants to rejoin
                     clear();
-                    mvprintw(10, 10, "Rejoin game? (y/n): ");
+                    int max_y, max_x;
+                    getmaxyx(stdscr, max_y, max_x);
+                    
+                    attron(A_BOLD);
+                    mvprintw(max_y / 2 - 1, (max_x - 30) / 2, "Do you want to rejoin?");
+                    attroff(A_BOLD);
+                    
+                    mvprintw(max_y / 2 + 1, (max_x - 20) / 2, "Y = Yes, rejoin game");
+                    mvprintw(max_y / 2 + 2, (max_x - 20) / 2, "N = No, back to menu");
+                    
+                    mvprintw(max_y / 2 + 4, (max_x - 20) / 2, "Your choice: ");
                     refresh();
                     
-                    int rejoin = getch();
-                    if (rejoin == 'y' || rejoin == 'Y') {
-                        // Reconnect
+                    nodelay(stdscr, FALSE);
+                    int rejoin;
+                    do {
+                        rejoin = getch();
+                        rejoin = tolower(rejoin);
+                    } while (rejoin != 'y' && rejoin != 'n');
+                    nodelay(stdscr, TRUE);
+                    
+                    if (rejoin == 'y') {
+                        // Save player name before disconnecting
+                        char saved_name[MAX_NAME_LENGTH];
+                        pthread_mutex_lock(&client_state.state_mutex);
+                        strncpy(saved_name, client_state.current_state.snakes[client_state.my_player_id].name, 
+                               MAX_NAME_LENGTH - 1);
+                        pthread_mutex_unlock(&client_state.state_mutex);
+                        
+                        // Disconnect first
                         disconnect_from_game();
                         
-                        char host[256] = "127.0.0.1";
-                        int port = DEFAULT_PORT;
-                        char name[MAX_NAME_LENGTH];
-                        strncpy(name, client_state.current_state.snakes[client_state.my_player_id].name, 
-                               MAX_NAME_LENGTH - 1);
+                        // Show reconnecting message
+                        clear();
+                        mvprintw(max_y / 2, (max_x - 20) / 2, "Reconnecting...");
+                        refresh();
+                        usleep(500000); // 0.5s delay
                         
-                        if (connect_to_game(host, port, name)) {
+                        // Reconnect
+                        if (connect_to_game(client_state.connected_host, last_connected_port, saved_name)) {
+                            // Wait for server to send first game state
+                            usleep(500000); // 0.5s delay
                             continue;
                         }
                     }
                     
+                    // Player chose not to rejoin, disconnect and return to menu
+                    disconnect_from_game();
                     return;
                 }
                 
@@ -342,6 +397,7 @@ int main(void) {
     memset(&client_state, 0, sizeof(ClientState));
     client_state.socket = -1;
     client_state.my_player_id = -1;
+    client_state.death_handled = false;
     pthread_mutex_init(&client_state.state_mutex, NULL);
     
     // Initialize UI
@@ -356,8 +412,8 @@ int main(void) {
         switch (choice) {
             case MENU_NEW_GAME: {
                 GameConfig config;
-                if (get_game_config(&config)) {
-                    int port = DEFAULT_PORT;
+                int port = DEFAULT_PORT;
+                if (get_game_config(&config, &port)) {
                     
                     // Show starting server message BEFORE starting server
                     clear();

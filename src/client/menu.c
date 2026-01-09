@@ -62,7 +62,7 @@ MenuChoice show_main_menu(bool can_resume) {
     }
 }
 
-bool get_game_config(GameConfig *config) {
+bool get_game_config(GameConfig *config, int *port) {
     clear();
     nodelay(stdscr, FALSE);
     echo();
@@ -82,14 +82,18 @@ bool get_game_config(GameConfig *config) {
     attron(A_BOLD);
     mvprintw(start_y, start_x, "Game mode:");
     attroff(A_BOLD);
-    mvprintw(start_y + 1, start_x + 2, "1 = Standard (10s after last player)");
+    mvprintw(start_y + 1, start_x + 2, "1 = Standard (10s after last player) [default]");
     mvprintw(start_y + 2, start_x + 2, "2 = Timed (fixed time limit)");
     mvprintw(start_y + 3, start_x, "Choice: ");
     move(start_y + 3, start_x + 8);
     refresh();
     char mode_str[10];
     getnstr(mode_str, 9);
-    config->mode = (atoi(mode_str) == 2) ? MODE_TIMED : MODE_STANDARD;
+    int mode_choice = atoi(mode_str);
+    if (mode_choice != 1 && mode_choice != 2) {
+        mode_choice = 1; // Default to Standard
+    }
+    config->mode = (mode_choice == 2) ? MODE_TIMED : MODE_STANDARD;
     start_y += 5;
     
     // Time limit
@@ -113,14 +117,18 @@ bool get_game_config(GameConfig *config) {
     attron(A_BOLD);
     mvprintw(start_y, start_x, "World type:");
     attroff(A_BOLD);
-    mvprintw(start_y + 1, start_x + 2, "1 = No obstacles (wrap around)");
+    mvprintw(start_y + 1, start_x + 2, "1 = No obstacles (wrap around) [default]");
     mvprintw(start_y + 2, start_x + 2, "2 = With obstacles");
     mvprintw(start_y + 3, start_x, "Choice: ");
     move(start_y + 3, start_x + 8);
     refresh();
     char world_str[10];
     getnstr(world_str, 9);
-    config->world_type = (atoi(world_str) == 2) ? WORLD_WITH_OBSTACLES : WORLD_NO_OBSTACLES;
+    int world_choice = atoi(world_str);
+    if (world_choice != 1 && world_choice != 2) {
+        world_choice = 1; // Default to No obstacles
+    }
+    config->world_type = (world_choice == 2) ? WORLD_WITH_OBSTACLES : WORLD_NO_OBSTACLES;
     start_y += 5;
     
     // Load from file
@@ -160,8 +168,9 @@ bool get_game_config(GameConfig *config) {
         char width_str[10];
         getnstr(width_str, 9);
         config->width = atoi(width_str);
-        if (config->width < 20) config->width = 40;
-        if (config->width > 80) config->width = 80;
+        if (config->width < 20 || config->width > 80) {
+            config->width = 40; // Default if out of range
+        }
         start_y += 2;
         
         attron(A_BOLD);
@@ -173,13 +182,32 @@ bool get_game_config(GameConfig *config) {
         char height_str[10];
         getnstr(height_str, 9);
         config->height = atoi(height_str);
-        if (config->height < 10) config->height = 20;
-        if (config->height > 40) config->height = 40;
+        if (config->height < 10 || config->height > 40) {
+            config->height = 20; // Default if out of range
+        }
         start_y += 2;
     } else {
         config->width = 40;
         config->height = 20;
     }
+    
+    // Player mode (Singleplayer/Multiplayer)
+    attron(A_BOLD);
+    mvprintw(start_y, start_x, "Player mode:");
+    attroff(A_BOLD);
+    mvprintw(start_y + 1, start_x + 2, "1 = Singleplayer (only you) [default]");
+    mvprintw(start_y + 2, start_x + 2, "2 = Multiplayer (up to 8 players)");
+    mvprintw(start_y + 3, start_x, "Choice: ");
+    move(start_y + 3, start_x + 8);
+    refresh();
+    char player_mode_str[10];
+    getnstr(player_mode_str, 9);
+    int player_mode = atoi(player_mode_str);
+    if (player_mode != 1 && player_mode != 2) {
+        player_mode = 1; // Default to Singleplayer
+    }
+    config->max_players = (player_mode == 1) ? 1 : MAX_PLAYERS;
+    start_y += 5;
     
     // Port
     attron(A_BOLD);
@@ -190,8 +218,8 @@ bool get_game_config(GameConfig *config) {
     refresh();
     char port_str[10];
     getnstr(port_str, 9);
-    int port = atoi(port_str);
-    if (port <= 0) port = DEFAULT_PORT;
+    *port = atoi(port_str);
+    if (*port <= 0) *port = DEFAULT_PORT;
     
     noecho();
     nodelay(stdscr, TRUE);
@@ -292,11 +320,16 @@ void show_error(const char *message) {
     attroff(A_BOLD | COLOR_PAIR(COLOR_PAIR_FOOD));
     
     // Press key prompt
-    const char *prompt = "Press any key...";
+    const char *prompt = "Press ENTER to continue...";
     mvprintw(start_y + 6, (max_x - strlen(prompt)) / 2, "%s", prompt);
     refresh();
     
-    getch();
+    // Wait for Enter key only
+    int key;
+    do {
+        key = getch();
+    } while (key != '\n' && key != '\r' && key != KEY_ENTER);
+    
     nodelay(stdscr, TRUE);
 }
 
@@ -373,10 +406,15 @@ void show_game_over_stats(const GameState *state) {
     
     // Press key prompt
     start_y += 3;
-    const char *prompt = "Press any key to continue...";
+    const char *prompt = "Press ENTER to continue...";
     mvprintw(start_y, (max_x - strlen(prompt)) / 2, "%s", prompt);
     refresh();
     
-    getch();
+    // Wait for Enter key only
+    int key;
+    do {
+        key = getch();
+    } while (key != '\n' && key != '\r' && key != KEY_ENTER);
+    
     nodelay(stdscr, TRUE);
 }

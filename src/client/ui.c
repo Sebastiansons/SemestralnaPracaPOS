@@ -43,7 +43,7 @@ int get_color_pair(int player_id) {
     return COLOR_PAIR_SNAKE_BASE + (player_id % 8);
 }
 
-void render_game_state(const GameState *state, int my_player_id) {
+void render_game_state(const GameState *state, int my_player_id, const char *host, int port) {
     clear();
     
     int start_y = 2;
@@ -117,6 +117,21 @@ void render_game_state(const GameState *state, int my_player_id) {
     
     mvprintw(0, start_x, "Snake Game - Press 'q' to quit, 'p' to pause");
     
+    mvprintw(info_y++, info_x, "Server: %s:%d", host, port);
+    mvprintw(info_y++, info_x, "Mode: %s", 
+             state->mode == MODE_TIMED ? "Timed" : "Standard");
+    mvprintw(info_y++, info_x, "Type: %s",
+             state->max_players == 1 ? "Singleplayer" : "Multiplayer");
+    
+    // Count alive players
+    int alive_count = 0;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (state->snakes[i].alive) {
+            alive_count++;
+        }
+    }
+    mvprintw(info_y++, info_x, "Players: %d/%d", alive_count, state->max_players);
+    
     mvprintw(info_y++, info_x, "Time: %d:%02d", state->elapsed_time / 60, state->elapsed_time % 60);
     if (state->mode == MODE_TIMED && state->time_limit > 0) {
         int remaining = state->time_limit - state->elapsed_time;
@@ -165,7 +180,7 @@ void render_message(const char *message) {
     refresh();
 }
 
-void render_death_message(int score, int survival_time) {
+void render_death_message(int score, int survival_time, const char *host, int port) {
     clear();
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
@@ -173,24 +188,30 @@ void render_death_message(int score, int survival_time) {
     char msg1[] = "You died!";
     char msg2[64];
     char msg3[64];
-    char msg4[] = "Press any key...";
+    char msg4[128];
+    char msg5[] = "Press ENTER to continue...";
     
     snprintf(msg2, sizeof(msg2), "Your score: %d", score);
     snprintf(msg3, sizeof(msg3), "Survival time: %d:%02d", survival_time / 60, survival_time % 60);
+    snprintf(msg4, sizeof(msg4), "Server: %s:%d", host, port);
     
     attron(A_BOLD);
-    mvprintw(max_y / 2 - 2, (max_x - strlen(msg1)) / 2, "%s", msg1);
+    mvprintw(max_y / 2 - 3, (max_x - strlen(msg1)) / 2, "%s", msg1);
     attroff(A_BOLD);
     
     attron(COLOR_PAIR(COLOR_PAIR_FOOD) | A_BOLD);
-    mvprintw(max_y / 2, (max_x - strlen(msg2)) / 2, "%s", msg2);
+    mvprintw(max_y / 2 - 1, (max_x - strlen(msg2)) / 2, "%s", msg2);
     attroff(COLOR_PAIR(COLOR_PAIR_FOOD) | A_BOLD);
     
     attron(COLOR_PAIR(COLOR_PAIR_SNAKE_BASE + 1) | A_BOLD);
-    mvprintw(max_y / 2 + 1, (max_x - strlen(msg3)) / 2, "%s", msg3);
+    mvprintw(max_y / 2, (max_x - strlen(msg3)) / 2, "%s", msg3);
     attroff(COLOR_PAIR(COLOR_PAIR_SNAKE_BASE + 1) | A_BOLD);
     
-    mvprintw(max_y / 2 + 3, (max_x - strlen(msg4)) / 2, "%s", msg4);
+    mvprintw(max_y / 2 + 1, (max_x - strlen(msg4)) / 2, "%s", msg4);
+    
+    attron(A_DIM);
+    mvprintw(max_y / 2 + 3, (max_x - strlen(msg5)) / 2, "%s", msg5);
+    attroff(A_DIM);
     
     refresh();
 }

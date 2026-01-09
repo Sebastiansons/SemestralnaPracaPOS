@@ -14,7 +14,7 @@ typedef enum {
 
 // Menu functions
 MenuChoice show_main_menu(bool can_resume);
-bool get_game_config(GameConfig *config);
+bool get_game_config(GameConfig *config, int *port);
 bool get_connection_info(char *host, int *port, char *player_name);
 void show_error(const char *message);
 void show_game_over_stats(const GameState *state);

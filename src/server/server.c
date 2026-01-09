@@ -45,7 +45,13 @@ void *client_handler(void *arg) {
                     if (player_id == -1) {
                         Message error_msg;
                         error_msg.type = MSG_ERROR;
-                        strcpy(error_msg.data.error_msg, "Game is full");
+                        if (game->state.max_players == 1) {
+                            strcpy(error_msg.data.error_msg, "Game is singleplayer only");
+                        } else {
+                            snprintf(error_msg.data.error_msg, sizeof(error_msg.data.error_msg),
+                                    "Game is full (%d/%d players)", 
+                                    game->state.player_count, game->state.max_players);
+                        }
                         size_t size;
                         serialize_message(&error_msg, buffer, &size);
                         send_data(client_socket, buffer, size);
@@ -124,6 +130,7 @@ int main(int argc, char *argv[]) {
     config.time_limit = 0;
     config.load_from_file = false;
     config.map_file[0] = '\0';
+    config.max_players = MAX_PLAYERS; // Default to multiplayer
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -147,6 +154,11 @@ int main(int argc, char *argv[]) {
             config.load_from_file = true;
             strncpy(config.map_file, argv[i + 1], sizeof(config.map_file) - 1);
             i++;
+        } else if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
+            config.max_players = atoi(argv[i + 1]);
+            if (config.max_players < 1) config.max_players = 1;
+            if (config.max_players > MAX_PLAYERS) config.max_players = MAX_PLAYERS;
+            i++;
         }
     }
     
@@ -159,6 +171,8 @@ int main(int argc, char *argv[]) {
     printf("Mode: %s\n", config.mode == MODE_STANDARD ? "Standard" : "Timed");
     printf("World: %dx%d\n", config.width, config.height);
     printf("Obstacles: %s\n", config.world_type == WORLD_WITH_OBSTACLES ? "Yes" : "No");
+    printf("Max players: %d (%s)\n", config.max_players, 
+           config.max_players == 1 ? "Singleplayer" : "Multiplayer");
     
     // Create game
     game = create_game(&config);

@@ -71,6 +71,9 @@ void serialize_message(const Message *msg, uint8_t *buffer, size_t *size) {
             
             memcpy(buffer + offset, &state->game_over, sizeof(bool));
             offset += sizeof(bool);
+            
+            memcpy(buffer + offset, &state->max_players, sizeof(int));
+            offset += sizeof(int);
             break;
         }
             
@@ -179,6 +182,10 @@ bool deserialize_message(const uint8_t *buffer, size_t size, Message *msg) {
             
             if (size < offset + sizeof(bool)) return false;
             memcpy(&state->game_over, buffer + offset, sizeof(bool));
+            offset += sizeof(bool);
+            
+            if (size < offset + sizeof(int)) return false;
+            memcpy(&state->max_players, buffer + offset, sizeof(int));
             break;
         }
             

@@ -25,6 +25,7 @@ Game *create_game(const GameConfig *config) {
     game->state.elapsed_time = 0;
     game->state.game_over = false;
     game->state.food_count = 0;
+    game->state.max_players = config->max_players;
     
     // Load or generate map
     if (config->load_from_file && config->map_file[0] != '\0') {
@@ -55,6 +56,7 @@ Game *create_game(const GameConfig *config) {
     game->running = true;
     game->start_time = time(NULL);
     game->last_player_time = time(NULL);
+    game->config = *config; // Store config
     
     for (int i = 0; i < MAX_PLAYERS; i++) {
         game->client_sockets[i] = -1;
@@ -87,7 +89,8 @@ void destroy_game(Game *game) {
 int add_player(Game *game, int socket, const char *name) {
     pthread_mutex_lock(&game->mutex);
     
-    if (game->state.player_count >= MAX_PLAYERS) {
+    // Check if game is full based on max_players setting
+    if (game->state.player_count >= game->state.max_players) {
         pthread_mutex_unlock(&game->mutex);
         return -1;
     }
