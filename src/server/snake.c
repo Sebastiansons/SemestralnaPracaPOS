@@ -92,8 +92,9 @@ bool check_collision_with_snake(const Snake *snake1, const Snake *snake2) {
     
     Position head1 = snake1->positions[0];
     
-    // Check if snake1's head collides with snake2's body
-    for (int i = 0; i < snake2->length; i++) {
+    // Check if snake1's head collides with snake2's BODY (not head)
+    // Start from i=1 to skip snake2's head (only check body segments)
+    for (int i = 1; i < snake2->length; i++) {
         if (head1.x == snake2->positions[i].x && head1.y == snake2->positions[i].y) {
             return true;
         }

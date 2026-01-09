@@ -303,8 +303,6 @@ void game_loop(void) {
                 if (!client_state.current_state.snakes[client_state.my_player_id].alive && 
                     !client_state.death_handled) {
                     
-                    client_state.death_handled = true; // Mark as handled
-                    
                     int player_score = client_state.current_state.snakes[client_state.my_player_id].score;
                     int spawn_time = client_state.current_state.snakes[client_state.my_player_id].spawn_time;
                     int survival_time = client_state.current_state.elapsed_time - spawn_time;
@@ -347,6 +345,9 @@ void game_loop(void) {
                     nodelay(stdscr, TRUE);
                     
                     if (rejoin == 'y') {
+                        // Mark death as handled BEFORE reconnecting
+                        client_state.death_handled = true;
+                        
                         // Save player name before disconnecting
                         char saved_name[MAX_NAME_LENGTH];
                         pthread_mutex_lock(&client_state.state_mutex);
@@ -363,7 +364,7 @@ void game_loop(void) {
                         refresh();
                         usleep(500000); // 0.5s delay
                         
-                        // Reconnect
+                        // Reconnect (this will reset death_handled to false)
                         if (connect_to_game(client_state.connected_host, last_connected_port, saved_name)) {
                             // Wait for server to send first game state
                             usleep(500000); // 0.5s delay
@@ -371,7 +372,12 @@ void game_loop(void) {
                         }
                     }
                     
+                    // Mark death as handled
+                    client_state.death_handled = true;
+                    
                     // Player chose not to rejoin, disconnect and return to menu
+                    // Give server time to process the disconnect properly
+                    usleep(100000); // 100ms delay
                     disconnect_from_game();
                     return;
                 }
@@ -531,7 +537,9 @@ int main(void) {
                             }
                         }
                         
-                        stop_local_server();
+                        // Don't stop server here - let it run according to game rules
+                        // (10 seconds without players in Standard mode, or until time limit)
+                        // stop_local_server();
                     } else {
                         show_error("Failed to start server");
                     }
@@ -604,6 +612,9 @@ int main(void) {
     
     cleanup_ui();
     pthread_mutex_destroy(&client_state.state_mutex);
+    
+    // Stop local server if it was created by this client
+    stop_local_server();
     
     return 0;
 }
