@@ -1,11 +1,10 @@
-#define _POSIX_C_SOURCE 200809L
+#include <unistd.h>
 #include "protocol.h"
 #include "network.h"
 #include "game_logic.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
 #include <time.h>
@@ -112,6 +111,9 @@ void *game_loop(void *arg) {
         
         // Wait a bit for clients to receive final state
         sleep(2);
+        
+        // Stop the server
+        server_running = false;
     }
     
     server_running = false;

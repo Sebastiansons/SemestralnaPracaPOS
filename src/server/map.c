@@ -47,23 +47,27 @@ void generate_random_map(uint8_t **obstacles, int width, int height, float obsta
     
     srand(time(NULL));
     
-    // Generate random obstacles
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            if ((float)rand() / RAND_MAX < obstacle_density) {
-                set_obstacle(*obstacles, x, y, width);
-            }
-        }
+    Position center = {width / 2, height / 2};
+    
+    // Define safe spawn zone radius (min 10 units from center)
+    int safe_radius = (width < height ? width : height) / 4;
+    if (safe_radius < 10) {
+        safe_radius = 10;
     }
     
-    // Ensure at least some free space in center
-    Position center = {width / 2, height / 2};
-    for (int dy = -2; dy <= 2; dy++) {
-        for (int dx = -2; dx <= 2; dx++) {
-            int x = center.x + dx;
-            int y = center.y + dy;
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                (*obstacles)[y * width + x] = 0;
+    // Generate random obstacles (but not too close to center)
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            // Calculate distance from center
+            int dx = x - center.x;
+            int dy = y - center.y;
+            int dist_sq = dx * dx + dy * dy;
+            
+            // Only place obstacles outside safe radius
+            if (dist_sq > safe_radius * safe_radius) {
+                if ((float)rand() / RAND_MAX < obstacle_density) {
+                    set_obstacle(*obstacles, x, y, width);
+                }
             }
         }
     }

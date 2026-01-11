@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void serialize_message(const Message *msg, uint8_t *buffer, size_t *size) {
     size_t offset = 0;
@@ -27,7 +28,7 @@ void serialize_message(const Message *msg, uint8_t *buffer, size_t *size) {
             
         case MSG_GAME_STATE: {
             // Serialize game state without the pointer
-            GameState *state = &msg->data.state;
+            const GameState *state = &msg->data.state;
             
             // Copy basic fields
             memcpy(buffer + offset, &state->game_id, sizeof(int));

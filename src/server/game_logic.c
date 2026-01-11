@@ -34,17 +34,52 @@ Game *create_game(const GameConfig *config) {
             game->state.width = w;
             game->state.height = h;
         } else {
-            game->state.obstacles = NULL;
+            // Failed to load map, generate random obstacles instead
+            Position center = {config->width / 2, config->height / 2};
+            int max_attempts = 10;
+            bool success = false;
+            
+            for (int attempt = 0; attempt < max_attempts; attempt++) {
+                generate_random_map(&game->state.obstacles, config->width, config->height, 0.10f);
+                
+                // Verify reachability
+                if (is_reachable(game->state.obstacles, config->width, config->height, center)) {
+                    success = true;
+                    break;
+                }
+                
+                // Free and try again
+                free_obstacles(game->state.obstacles);
+                game->state.obstacles = NULL;
+            }
+            
+            // If all attempts failed, create empty map
+            if (!success) {
+                game->state.obstacles = (uint8_t *)calloc(config->width * config->height, sizeof(uint8_t));
+            }
         }
     } else if (config->world_type == WORLD_WITH_OBSTACLES) {
-        // Generate random map with obstacles
-        generate_random_map(&game->state.obstacles, config->width, config->height, 0.15f);
-        
-        // Verify reachability
+        // Generate random map with obstacles - retry until reachable
         Position center = {config->width / 2, config->height / 2};
-        if (!is_reachable(game->state.obstacles, config->width, config->height, center)) {
-            // If not reachable, create map without obstacles
+        int max_attempts = 10;
+        bool success = false;
+        
+        for (int attempt = 0; attempt < max_attempts; attempt++) {
+            generate_random_map(&game->state.obstacles, config->width, config->height, 0.10f);
+            
+            // Verify reachability
+            if (is_reachable(game->state.obstacles, config->width, config->height, center)) {
+                success = true;
+                break;
+            }
+            
+            // Free and try again
             free_obstacles(game->state.obstacles);
+            game->state.obstacles = NULL;
+        }
+        
+        // If all attempts failed, create empty map
+        if (!success) {
             game->state.obstacles = (uint8_t *)calloc(config->width * config->height, sizeof(uint8_t));
         }
     } else {
@@ -233,14 +268,12 @@ void update_game(Game *game) {
         }
     }
     
-    // Update pause countdowns
+    // Update pause countdowns (only for resume countdown)
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (game->pause_countdown[i] > 0) {
             game->pause_countdown[i]--;
             if (game->pause_countdown[i] == 0) {
                 game->state.snakes[i].paused = false;
-            } else {
-                game->state.snakes[i].paused = true;
             }
         }
     }
@@ -350,6 +383,7 @@ void pause_player(Game *game, int player_id) {
     
     if (player_id >= 0 && player_id < MAX_PLAYERS && game->client_connected[player_id]) {
         game->state.snakes[player_id].paused = true;
+        game->pause_countdown[player_id] = 0; // Reset countdown when pausing
     }
     
     pthread_mutex_unlock(&game->mutex);

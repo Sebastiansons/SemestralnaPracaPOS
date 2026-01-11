@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#include <unistd.h>
 #include "protocol.h"
 #include "network.h"
 #include "ui.h"
@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -143,8 +142,24 @@ bool start_local_server(const GameConfig *config, int *port) {
     }
     
     // Parent process - wait for server to start
-    sleep(2);  // Give server more time to fully initialize
-    return true;
+    // Check if server started successfully by trying to connect
+    sleep(1);  // Initial wait
+    
+    // Try to verify server is listening (with retries)
+    for (int i = 0; i < 3; i++) {  // Reduced from 5 to 3 attempts
+        int test_sock = connect_to_server("127.0.0.1", *port);
+        if (test_sock >= 0) {
+            close_socket(test_sock);
+            return true;  // Server is up!
+        }
+        usleep(500000);  // Wait 0.5s between retries (reduced from 1s)
+    }
+    
+    // Server didn't start - kill the child process
+    kill(server_pid, SIGTERM);
+    waitpid(server_pid, NULL, 0);
+    server_pid = -1;
+    return false;
 }
 
 void stop_local_server(void) {
@@ -225,7 +240,7 @@ void disconnect_from_game(void) {
 }
 
 void game_loop(void) {
-    bool paused = false;
+    bool locally_paused = false;  // Track if we're in pause menu locally
     
     while (running && client_state.game_active && client_state.connected) {
         // Handle input
@@ -264,18 +279,31 @@ void game_loop(void) {
                 break;
             case 'p':
             case 'P':
-                if (!paused) {
+                if (!locally_paused) {
+                    // Send MSG_PAUSE immediately
                     msg.type = MSG_PAUSE;
-                    paused = true;
-                    send_input = true;
+                    if (client_state.connected) {
+                        uint8_t buffer[BUFFER_SIZE];
+                        size_t size;
+                        serialize_message(&msg, buffer, &size);
+                        send_data(client_state.socket, buffer, size);
+                    }
                     
-                    // Go to menu
+                    locally_paused = true;
+                    
+                    // Go to menu (this blocks until user makes a choice)
                     MenuChoice choice = show_main_menu(true);
                     
                     if (choice == MENU_RESUME_GAME) {
+                        // Send MSG_RESUME immediately
                         msg.type = MSG_RESUME;
-                        send_input = true;
-                        paused = false;
+                        if (client_state.connected) {
+                            uint8_t buffer[BUFFER_SIZE];
+                            size_t size;
+                            serialize_message(&msg, buffer, &size);
+                            send_data(client_state.socket, buffer, size);
+                        }
+                        locally_paused = false;
                     } else if (choice == MENU_EXIT || choice == MENU_NEW_GAME) {
                         disconnect_from_game();
                         return;
@@ -295,10 +323,10 @@ void game_loop(void) {
             send_data(client_state.socket, buffer, size);
         }
         
-        // Render
-        if (!paused) {
-            pthread_mutex_lock(&client_state.state_mutex);
-            if (client_state.state_updated) {
+        // Render - always render to show game state, even when in pause menu
+        // This allows seeing other players and countdown
+        pthread_mutex_lock(&client_state.state_mutex);
+        if (client_state.state_updated) {
                 render_game_state(&client_state.current_state, client_state.my_player_id, 
                                  client_state.connected_host, client_state.connected_port);
                 
@@ -309,7 +337,6 @@ void game_loop(void) {
                     int player_score = client_state.current_state.snakes[client_state.my_player_id].score;
                     int spawn_time = client_state.current_state.snakes[client_state.my_player_id].spawn_time;
                     int survival_time = client_state.current_state.elapsed_time - spawn_time;
-                    int player_length = client_state.current_state.snakes[client_state.my_player_id].length;
                     
                     // Skip if this looks like a stale/initial state from server
                     // This happens when server sends state before init_snake completes
@@ -381,8 +408,7 @@ void game_loop(void) {
                             usleep(500000); // 0.5s delay
                             continue;
                         }
-                    }
-                    
+                    } else {
                         // Mark death as handled
                         client_state.death_handled = true;
                         
@@ -446,17 +472,17 @@ int main(void) {
                     // Draw outer box
                     attron(A_BOLD);
                     for (int i = 0; i < box_width; i++) {
-                        mvaddch(start_y, start_x + i, '═');
-                        mvaddch(start_y + box_height, start_x + i, '═');
+                        mvaddch(start_y, start_x + i, ACS_HLINE);
+                        mvaddch(start_y + box_height, start_x + i, ACS_HLINE);
                     }
                     for (int i = 1; i < box_height; i++) {
-                        mvaddch(start_y + i, start_x, '║');
-                        mvaddch(start_y + i, start_x + box_width - 1, '║');
+                        mvaddch(start_y + i, start_x, ACS_VLINE);
+                        mvaddch(start_y + i, start_x + box_width - 1, ACS_VLINE);
                     }
-                    mvaddch(start_y, start_x, '╔');
-                    mvaddch(start_y, start_x + box_width - 1, '╗');
-                    mvaddch(start_y + box_height, start_x, '╚');
-                    mvaddch(start_y + box_height, start_x + box_width - 1, '╝');
+                    mvaddch(start_y, start_x, ACS_ULCORNER);
+                    mvaddch(start_y, start_x + box_width - 1, ACS_URCORNER);
+                    mvaddch(start_y + box_height, start_x, ACS_LLCORNER);
+                    mvaddch(start_y + box_height, start_x + box_width - 1, ACS_LRCORNER);
                     
                     // Title
                     attron(A_REVERSE);
@@ -501,6 +527,7 @@ int main(void) {
                         refresh();
                         
                         getnstr(name, MAX_NAME_LENGTH - 1);
+                        flushinp();  // Clear input buffer
                         noecho();
                         nodelay(stdscr, TRUE);
                         
@@ -515,17 +542,17 @@ int main(void) {
                             // Draw outer box
                             attron(A_BOLD);
                             for (int i = 0; i < box_width; i++) {
-                                mvaddch(conn_start_y, conn_start_x + i, '═');
-                                mvaddch(conn_start_y + box_height, conn_start_x + i, '═');
+                                mvaddch(conn_start_y, conn_start_x + i, ACS_HLINE);
+                                mvaddch(conn_start_y + box_height, conn_start_x + i, ACS_HLINE);
                             }
                             for (int i = 1; i < box_height; i++) {
-                                mvaddch(conn_start_y + i, conn_start_x, '║');
-                                mvaddch(conn_start_y + i, conn_start_x + box_width - 1, '║');
+                                mvaddch(conn_start_y + i, conn_start_x, ACS_VLINE);
+                                mvaddch(conn_start_y + i, conn_start_x + box_width - 1, ACS_VLINE);
                             }
-                            mvaddch(conn_start_y, conn_start_x, '╔');
-                            mvaddch(conn_start_y, conn_start_x + box_width - 1, '╗');
-                            mvaddch(conn_start_y + box_height, conn_start_x, '╚');
-                            mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, '╝');
+                            mvaddch(conn_start_y, conn_start_x, ACS_ULCORNER);
+                            mvaddch(conn_start_y, conn_start_x + box_width - 1, ACS_URCORNER);
+                            mvaddch(conn_start_y + box_height, conn_start_x, ACS_LLCORNER);
+                            mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, ACS_LRCORNER);
                             
                             // Title
                             attron(A_REVERSE);
@@ -553,18 +580,17 @@ int main(void) {
                         // (10 seconds without players in Standard mode, or until time limit)
                         // stop_local_server();
                     } else {
-                        show_error("Failed to start server");
+                        show_error("Failed to start server. Port may be in use.");
                     }
                 }
                 break;
             }
             
             case MENU_JOIN_GAME: {
-                char host[256];
                 int port;
                 char name[MAX_NAME_LENGTH];
                 
-                if (get_connection_info(host, &port, name)) {
+                if (get_connection_info(&port, name)) {
                     clear();
                     int max_y, max_x;
                     getmaxyx(stdscr, max_y, max_x);
@@ -577,33 +603,33 @@ int main(void) {
                     // Draw outer box
                     attron(A_BOLD);
                     for (int i = 0; i < box_width; i++) {
-                        mvaddch(conn_start_y, conn_start_x + i, '═');
-                        mvaddch(conn_start_y + box_height, conn_start_x + i, '═');
+                        mvaddch(conn_start_y, conn_start_x + i, ACS_HLINE);
+                        mvaddch(conn_start_y + box_height, conn_start_x + i, ACS_HLINE);
                     }
                     for (int i = 1; i < box_height; i++) {
-                        mvaddch(conn_start_y + i, conn_start_x, '║');
-                        mvaddch(conn_start_y + i, conn_start_x + box_width - 1, '║');
+                        mvaddch(conn_start_y + i, conn_start_x, ACS_VLINE);
+                        mvaddch(conn_start_y + i, conn_start_x + box_width - 1, ACS_VLINE);
                     }
-                    mvaddch(conn_start_y, conn_start_x, '╔');
-                    mvaddch(conn_start_y, conn_start_x + box_width - 1, '╗');
-                    mvaddch(conn_start_y + box_height, conn_start_x, '╚');
-                    mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, '╝');
+                    mvaddch(conn_start_y, conn_start_x, ACS_ULCORNER);
+                    mvaddch(conn_start_y, conn_start_x + box_width - 1, ACS_URCORNER);
+                    mvaddch(conn_start_y + box_height, conn_start_x, ACS_LLCORNER);
+                    mvaddch(conn_start_y + box_height, conn_start_x + box_width - 1, ACS_LRCORNER);
                     
                     // Title
                     attron(A_REVERSE);
                     mvprintw(conn_start_y + 2, conn_start_x + (box_width - 16) / 2, "  CONNECTING...  ");
                     attroff(A_REVERSE);
                     
-                    // Connection info
+                    // Connection info - always localhost
                     mvprintw(conn_start_y + 4, conn_start_x + 4, "Player:  %s", name);
-                    mvprintw(conn_start_y + 5, conn_start_x + 4, "Server:  %s:%d", host, port);
+                    mvprintw(conn_start_y + 5, conn_start_x + 4, "Server:  localhost:%d", port);
                     
                     mvprintw(conn_start_y + 7, conn_start_x + (box_width - 18) / 2, "Please wait...");
                     
                     attroff(A_BOLD);
                     refresh();
                     
-                    if (connect_to_game(host, port, name)) {
+                    if (connect_to_game("127.0.0.1", port, name)) {
                         game_loop();
                         disconnect_from_game();
                     } else {

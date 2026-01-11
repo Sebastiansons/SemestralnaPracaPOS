@@ -1,0 +1,141 @@
+NÁVOD NA NAHRATIE A SPUSTENIE NA SERVERI
+==========================================
+
+1. NAHRATIE SÚBOROV NA SERVER
+------------------------------
+
+Z PowerShell alebo CMD vo Windows (v adresári projektu):
+
+scp -P 10022 -r src CMakeLists.txt Makefile README.md example_map.txt sidor@frios2.fri.uniza.sk:~/snake_game/
+
+Alebo jednotlivo:
+scp -P 10022 -r src sidor@frios2.fri.uniza.sk:~/snake_game/
+scp -P 10022 Makefile sidor@frios2.fri.uniza.sk:~/snake_game/
+scp -P 10022 CMakeLists.txt sidor@frios2.fri.uniza.sk:~/snake_game/
+scp -P 10022 README.md sidor@frios2.fri.uniza.sk:~/snake_game/
+scp -P 10022 example_map.txt sidor@frios2.fri.uniza.sk:~/snake_game/
+
+
+2. PRIPOJENIE NA SERVER
+------------------------
+
+ssh frios2.fri.uniza.sk -l sidor -p 10022
+
+
+3. KOMPILÁCIA NA SERVERI
+-------------------------
+
+cd snake_game
+make all
+
+Alebo s CMake:
+mkdir build
+cd build
+cmake ..
+make
+
+
+4. SPUSTENIE
+------------
+
+A) Pre single-player alebo vytvorenie novej hry:
+
+./client
+  -> Zvoľ "1. New Game"
+  -> Nakonfiguruj hru
+  -> Zadaj svoje meno
+
+
+B) Pre multiplayer - v jednom terminály spusti server:
+
+./server -p 8888 -w 40 -h 20
+
+V druhom terminály spusti klienta:
+
+./client
+  -> Zvoľ "2. Join Game"
+  -> Zadaj meno
+  -> Host: 127.0.0.1
+  -> Port: 8888
+
+
+5. OVLÁDANIE HRY
+----------------
+
+Šípky alebo WASD - pohyb
+P - pauza
+Q - koniec
+
+
+6. PRÍKLADY SPUSTENIA SERVERA
+------------------------------
+
+Štandardný režim bez prekážok:
+./server -p 8888 -w 40 -h 20
+
+Časový režim (5 minút) s náhodnými prekážkami:
+./server -p 8888 -w 50 -h 25 -t 300 -o
+
+Načítanie mapy zo súboru:
+./server -p 8888 -m example_map.txt
+
+Timed režim s mapou zo súboru:
+./server -p 8888 -t 600 -m example_map.txt
+
+
+7. TESTOVANIE MEMORY LEAKOV
+----------------------------
+
+valgrind --leak-check=full --show-leak-kinds=all ./server -p 8888
+
+valgrind --leak-check=full --show-leak-kinds=all ./client
+
+
+8. MULTIPLAYER TESTOVANIE
+--------------------------
+
+Terminál 1:
+./server -p 8888 -w 40 -h 20
+
+Terminál 2:
+./client
+  -> Join Game
+  -> Hráč 1
+
+Terminál 3:
+./client
+  -> Join Game
+  -> Hráč 2
+
+Atď...
+
+
+9. ČISTENIE
+-----------
+
+make clean
+
+
+10. RIEŠENIE PROBLÉMOV
+----------------------
+
+Ak server beží na porte:
+ps aux | grep server
+kill <PID>
+
+Ak ncurses nefunguje správne:
+reset
+
+Ak sa client nemôže pripojiť:
+- Skontroluj, či server beží
+- Skontroluj port číslo
+- Skontroluj firewall
+
+
+POZNÁMKY:
+---------
+- Server proces pretrváva aj po odpojení klienta, ktorý ho vytvoril
+- Do hry sa môže pripojiť až 8 hráčov súčasne
+- Hráč sa môže znovu pripojiť aj po smrti svojho hadíka
+- Hra končí po 10 sekundách bez hráčov (štandardný režim)
+  alebo po uplynutí času (časový režim)
