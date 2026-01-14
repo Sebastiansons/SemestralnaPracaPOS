@@ -7,31 +7,31 @@
 
 #define COLOR_PAIR_FOOD 9
 
-MenuChoice show_main_menu(bool can_resume) {
+MenuChoice show_main_menu(bool can_resume) {//zobrazenie hlavneho menu
     clear();
-    nodelay(stdscr, FALSE);
+    nodelay(stdscr, FALSE);//cakaj na vstup
     
     const char *title = "=== SNAKE GAME ===";
     
     int max_y, max_x;
-    getmaxyx(stdscr, max_y, max_x);
+    getmaxyx(stdscr, max_y, max_x);//zisti rozmery terminalu
     
-    int start_y = max_y / 2 - 5;
+    int start_y = max_y / 2 - 5;//zaciatok v strede
     int start_x = max_x / 2 - strlen(title) / 2;
     
     attron(A_BOLD);
-    mvprintw(start_y, start_x, "%s", title);
+    mvprintw(start_y, start_x, "%s", title);//vypis nadpis
     attroff(A_BOLD);
     
     start_y += 2;
     
     // Dynamically build menu based on can_resume
-    if (can_resume) {
+    if (can_resume) {//ak moze pokracovat v hre
         mvprintw(start_y++, start_x, "1. New Game");
         mvprintw(start_y++, start_x, "2. Join Game");
         mvprintw(start_y++, start_x, "3. Resume Game");
         mvprintw(start_y++, start_x, "4. Exit");
-    } else {
+    } else {//inak bez resume
         mvprintw(start_y++, start_x, "1. New Game");
         mvprintw(start_y++, start_x, "2. Join Game");
         mvprintw(start_y++, start_x, "3. Exit");
@@ -40,11 +40,11 @@ MenuChoice show_main_menu(bool can_resume) {
     mvprintw(start_y + 2, start_x - 10, "Enter your choice: ");
     refresh();
     
-    int choice = getch();
+    int choice = getch();//precitaj volbu
     
-    nodelay(stdscr, TRUE);
+    nodelay(stdscr, TRUE);//prepni na non-blocking
     
-    if (can_resume) {
+    if (can_resume) {//spracuj volbu s resume
         switch (choice) {
             case '1': return MENU_NEW_GAME;
             case '2': return MENU_JOIN_GAME;
@@ -52,7 +52,7 @@ MenuChoice show_main_menu(bool can_resume) {
             case '4': return MENU_EXIT;
             default: return MENU_CANCEL;
         }
-    } else {
+    } else {//spracuj volbu bez resume
         switch (choice) {
             case '1': return MENU_NEW_GAME;
             case '2': return MENU_JOIN_GAME;

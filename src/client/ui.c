@@ -6,19 +6,19 @@
 #define COLOR_PAIR_FOOD 9
 #define COLOR_PAIR_OBSTACLE 10
 
-bool init_ui(void) {
-    initscr();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    nodelay(stdscr, TRUE);
-    curs_set(0);
+bool init_ui(void) {//inicializacia ncurses UI
+    initscr();//inicializuj ncurses
+    cbreak();//vypni line buffering
+    noecho();//nezobrazuj vstup
+    keypad(stdscr, TRUE);//povol specialne klavesy (sipky)
+    nodelay(stdscr, TRUE);//non-blocking vstup
+    curs_set(0);//skry kurzor
     
-    if (has_colors()) {
-        start_color();
+    if (has_colors()) {//ak terminal podporuje farby
+        start_color();//inicializuj farby
         
         // Snake colors (different for each player)
-        init_pair(1, COLOR_GREEN, COLOR_BLACK);
+        init_pair(1, COLOR_GREEN, COLOR_BLACK);//farby pre hadov
         init_pair(2, COLOR_BLUE, COLOR_BLACK);
         init_pair(3, COLOR_RED, COLOR_BLACK);
         init_pair(4, COLOR_YELLOW, COLOR_BLACK);
@@ -28,19 +28,19 @@ bool init_ui(void) {
         init_pair(8, COLOR_GREEN, COLOR_BLACK);
         
         // Food and obstacles
-        init_pair(COLOR_PAIR_FOOD, COLOR_RED, COLOR_BLACK);
-        init_pair(COLOR_PAIR_OBSTACLE, COLOR_WHITE, COLOR_BLACK);
+        init_pair(COLOR_PAIR_FOOD, COLOR_RED, COLOR_BLACK);//farba jedla
+        init_pair(COLOR_PAIR_OBSTACLE, COLOR_WHITE, COLOR_BLACK);//farba prekazok
     }
     
     return true;
 }
 
-void cleanup_ui(void) {
-    endwin();
+void cleanup_ui(void) {//ukoncenie ncurses UI
+    endwin();//obnov terminal do normalneho stavu
 }
 
-int get_color_pair(int player_id) {
-    return COLOR_PAIR_SNAKE_BASE + (player_id % 8);
+int get_color_pair(int player_id) {//vrati farbu pre hraca
+    return COLOR_PAIR_SNAKE_BASE + (player_id % 8);//rotuj farby pre 8 hracov
 }
 
 void render_game_state(const GameState *state, int my_player_id, const char *host, int port) {
